@@ -1,9 +1,32 @@
 # Atoms Demo
 
-用一句话描述需求，一支 AI 团队（团队负责人、产品经理、架构师、工程师）协作生成可运行的网页应用，并在浏览器里实时预览、对话迭代、版本回滚、一键发布。
+用一句话描述需求，一支 AI 团队（团队负责人、产品经理、架构师、工程师，以及你自己招募的专家）协作生成可运行的网页应用，并在浏览器里实时预览、对话迭代、版本回滚、一键发布。
 
-- 在线体验：https://atomsdemo1-five.vercel.app
-- 技术栈：Next.js 15（App Router）· React 19 · TypeScript · Tailwind CSS 4 · Supabase（Auth + Postgres + RLS）· DeepSeek（OpenAI 兼容协议）· Vercel
+| | |
+| --- | --- |
+| 在线体验 | https://atomsdemo1-five.vercel.app （无需注册，直接输入需求即可，游客模式） |
+| 代码仓库 | https://github.com/MasonLLG/Atoms_demo |
+| 技术栈 | Next.js 15（App Router）· React 19 · TypeScript · Tailwind CSS 4 · Supabase（Auth + Postgres + RLS）· DeepSeek（OpenAI 兼容协议）· Vercel |
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [架构设计](docs/architecture.md) | 整体架构、一次生成的完整流程、智能体框架、结构化输出、预览沙箱、SSE 协议、错误处理、安全 |
+| [数据库设计](docs/database.md) | 表结构、约束、行级权限、索引、迁移 |
+| [技术决策记录](docs/decisions.md) | 10 条关键取舍：背景、决定、替代方案、代价 |
+| [开发与部署](docs/development.md) | 环境变量、本地运行、离线模型、测试、部署、常见问题 |
+| [未来扩展](docs/roadmap.md) | 现有扩展点、按优先级的扩展方向与落点、工程层面的演进 |
+
+## 亮点
+
+- **可扩展的多智能体框架**：所有角色实现同一个 `Agent` 接口，通过共享上下文传递结构化产物；新增角色不改主流程。Mike 先判断意图，打招呼和提问直接回答，不会误触发建站。
+- **按账号授权的自定义智能体**：登录用户可以招募自己的专家（有模板），决定它在哪一步出场，建议交给工程师落地；数据库、服务端、前端三层校验，RLS 隔离。
+- **结构化输出与容错**：规划用 JSON + zod 校验 + 失败重试；代码用分隔标记流式输出，边写边预览；迭代用补丁，打不上自动回退整文件重写。
+- **安全的实时预览**：生成代码跑在无 `allow-same-origin` 的沙箱里，注入的运行时让生成的应用照常使用 localStorage 并按项目持久化，运行错误一键交给工程师修复。
+- **完整的错误处理与可观测性**：统一错误码、可重试判断、请求 id 贯穿日志与界面、超时与空闲看门狗、SSE 心跳、连接中断识别；失败消息带一键重试。
+- **游客模式**：基于 Supabase 匿名登录，无需注册直接生成，之后绑定邮箱作品全部保留。
+- **工程化**：26 项单元测试、3 组端到端测试（含模拟上游故障）、GitHub Actions CI、离线演示模型、幂等迁移脚本、Conventional Commits。
 
 ## 功能一览
 
@@ -22,132 +45,70 @@
 | 发布与 Remix | 一键发布得到公开链接 `/p/{slug}`，任何人可访问；登录用户可 Remix 到自己的工作区继续改 |
 | 导出 | 下载当前版本的单文件 HTML |
 
-## 架构
+## 架构概览
 
 ```
-浏览器
- ├─ 首页 / 登录注册（Supabase Auth）
- ├─ 工作台（项目增删查，直接用 Supabase SDK，受 RLS 保护）
- └─ 编辑器
-     ├─ 对话区：多智能体消息流 + PRD / 技术方案卡片
-     ├─ 代码区：Monaco
-     └─ 预览区：sandbox iframe + 预览运行时
-
-Next.js 服务端（Vercel）
- └─ POST /api/generate   多智能体编排，SSE 流式推送（API Key 只存在服务端）
-
-Supabase Postgres
- ├─ projects   项目、当前版本指针、发布状态
- ├─ versions   完整代码快照
- └─ messages   对话记录，结构化产物存 jsonb
+浏览器 ── Supabase SDK（受 RLS 保护）──> Supabase Auth / Postgres
+  │                                        projects · versions · messages · custom_agents
+  └─ POST /api/generate（SSE）
+        鉴权 → 校验 → 限流 → 组装团队 → 流水线 → 推送事件
+        Mike 意图 → Emma PRD → Bob 技术方案 → 自定义智能体建议 → Alex 写代码 / 补丁 → 保存版本
+                                                                   └─> DeepSeek
 ```
 
-只有调用 LLM 的生成接口走服务端，项目管理、版本恢复、发布、Remix 都由前端直接通过 Supabase SDK 完成，由行级权限（RLS）保证只能操作自己的数据。表结构见 [`supabase/schema.sql`](supabase/schema.sql)。
+只有调用模型的接口走服务端（Key 不出服务端），其余操作由前端直接调用 Supabase，权限集中写在 RLS。详见 [架构设计](docs/architecture.md)。
 
-### 智能体编排
+## 技术选型
 
-| 角色 | 输入 | 输出 | 形式 |
-| --- | --- | --- | --- |
-| Mike 团队负责人 | 用户消息 + 最近对话 + 当前代码 | 意图（开发 / 闲聊提问）与回复 | JSON（zod 校验）；闲聊或提问时直接回答并结束流水线，不产生版本 |
-| Emma 产品经理 | 用户需求 | 应用名、目标用户、功能与优先级、页面、数据模型 | JSON（zod 校验） |
-| Bob 架构师 | 需求 + PRD | 视觉风格、模块划分、状态结构、存储 key、实现要点 | JSON（zod 校验） |
-| Alex 工程师（首次） | 需求 + PRD + 技术方案 | 完整单文件 HTML | 分隔标记包裹的纯文本，流式 |
-| Alex 工程师（迭代） | 当前代码 + 最近对话 + 修改要求 | SEARCH/REPLACE 补丁 | 纯文本，流式 |
+| 选择 | 原因 |
+| --- | --- |
+| Next.js App Router + Vercel | 前后端一个仓库，Serverless 接口支持长时间流式输出，推送即部署 |
+| Supabase | Auth（含匿名登录）、Postgres、RLS 一站式，前端可以安全地直连数据库 |
+| DeepSeek（OpenAI 兼容） | 成本低、支持 JSON 模式；通过环境变量可以切换任意兼容服务 |
+| zod | 一个 schema 同时用于生成给模型的 JSON Schema、服务端校验和前端表单 |
+| SSE | 单向推送足够，比 WebSocket 简单，Serverless 友好 |
+| Monaco | 与 VS Code 一致的代码编辑体验 |
+| Vitest + Playwright | 单元测试覆盖解析和编排逻辑，端到端测试覆盖真实用户流程 |
 
-### 智能体框架与扩展
+## 工程实践
 
-编排器只依赖一个最小接口，新增角色不需要改主流程（[`src/lib/agents/core`](src/lib/agents/core)）：
-
-```ts
-interface Agent {
-  id: string;
-  profile: AgentProfile;            // 名字、头衔、颜色、头像
-  startStatus: string;
-  when?(ctx: AgentContext): boolean; // 是否出场（如只在首次生成时出场）
-  run(ctx: AgentContext, io: AgentIO): Promise<AgentResult>;
-}
-```
-
-- **AgentContext（黑板）**：本次生成的需求、当前代码、对话摘要、出场成员，以及各成员写入的结构化产物（`artifacts`）和留给后续成员的笔记（`notes`）。
-- **AgentIO（运行时能力）**：`json()`（schema 校验和重试）、`stream()`（流式推送到前端）、`status()`、`emit()`。智能体不接触 SSE 和消息持久化，这些由流水线运行器 `runPipeline` 统一负责。
-- **工厂函数**：`defineJsonAgent`（产品经理、架构师都用它定义，几行配置就是一个角色）、`defineStaticAgent`（不调用模型的角色）。团队负责人（意图判断、可提前结束流水线）和工程师（补丁和回退）逻辑较复杂，直接实现接口。
-- **提前结束**：任何成员返回 `halt: true` 都会结束流水线，例如 Mike 判断用户只是打招呼时直接回答，不浪费后续成员的调用。
-- **自定义智能体（按账号授权）**：登录用户在「我的智能体」页面（`/agents`）创建自己的团队成员，配置名字、头衔、颜色、职责说明、参与的流程（首次生成或迭代修改），以及出场位置（插在哪位内置成员之后）。页面提供无障碍顾问、文案专家、UI 设计师、安全审查四个模板，并实时预览出场顺序。
-  - 数据存在 `custom_agents` 表（[`migrations/003`](supabase/migrations/003_user_custom_agents.sql)），行级权限保证每个用户只能看到和使用自己的智能体。生成接口在当前用户的会话下读取其**已启用**的智能体，经 `defineCustomAgent` 校验后插入流水线；配置无效的单个智能体会被跳过，不影响整个团队。
-  - 自定义智能体输出结构化的建议清单，写入共享上下文的 `notes`，自动进入工程师的上下文；对话里显示为可展开的"某某的建议"卡片，形象随消息保存，刷新后依然正确。
-  - 运维层面还保留环境变量 `CUSTOM_AGENTS`，可以配置对所有用户生效的全局智能体。
-
-### 结构化输出的取舍
-
-- **规划类产出用 JSON**：zod schema 是唯一事实来源，`z.toJSONSchema` 生成给模型看的 Schema，配合 DeepSeek 的 JSON 模式输出，服务端再用同一个 schema 校验。校验失败时把错误信息回传给模型重试一次。
-- **代码不放进 JSON**：把几十 KB 的 HTML 塞进 JSON 字符串，引号和换行转义很容易出错，也没法边生成边预览。所以工程师用 `<<<FILE index.html>>> … <<<END>>>` 标记包裹代码，解析器同时兼容模型偶尔多包一层 markdown 代码块、或者完全没按格式输出的情况。
-- **迭代用补丁**：输出量小、速度快。补丁先精确匹配，再做忽略缩进的宽松匹配，都失败时自动回退为整文件重写。
-- **前后端事件协议**：`meta` / `agent_start` / `delta` / `agent_done` / `status` / `project` / `version_saved` / `error` / `done`，定义在 [`src/lib/agents/events.ts`](src/lib/agents/events.ts)。
-
-### 预览沙箱
-
-生成的代码运行在 `sandbox="allow-scripts ..."` 的 iframe 中，**不加** `allow-same-origin`，拿不到主站的 Cookie 和登录态。代价是 iframe 里原生的 localStorage 不可用。解决办法是在 `<head>` 最前面注入一段预览运行时（[`src/lib/runtime.ts`](src/lib/runtime.ts)），它做两件事：
-
-1. 用一个 Storage 替身接管 `localStorage`，写入时通过 `postMessage` 交给父页面按项目持久化，下次打开时再作为种子数据注入。生成的应用不需要任何改动就能持久化数据。
-2. 捕获 `error` 和 `unhandledrejection` 并回传给编辑器，驱动"让 Alex 修复"。
-
-## 关键取舍
-
-- **生成物限定为单文件 HTML**（Tailwind CDN + 原生 JS）。不做多文件工程和在线构建（如 WebContainer），优先保证几十秒内稳定出结果，预览和发布也都只是一个页面。
-- **顺序流水线，不做自主规划循环**。每一步可观察、耗时可预期、出错好定位。
-- **版本存全量快照**。单文件通常只有 10 到 40 KB，查看、回滚、发布都是一次读取。回滚等于把旧版本复制成新版本，历史只追加、不改写。
-- **生成应用的数据存在浏览器里**，不为任意应用设计通用的后端存储，复杂度可控。
-- **成本控制**：每个用户 24 小时内的生成次数有上限（`DAILY_GENERATION_LIMIT`，默认 40），游客单独限额（`GUEST_DAILY_GENERATION_LIMIT`，默认 10）。
-- **游客模式用匿名账号而不是"免登录"**：游客拿到的是一个真实的匿名用户 id，行级权限、限流、数据结构完全复用，无需另写一套本地存储逻辑；绑定邮箱只是在同一个用户 id 上补充邮箱和密码，不需要任何数据迁移。
+| 方面 | 做法 |
+| --- | --- |
+| 错误处理 | `AppError` 统一错误码（未登录、限流、Key 无效、余额不足、上游繁忙、超时、输出不合法、数据库错误等），对外只返回可读信息和是否可重试 |
+| 重试与超时 | SDK 指数退避重试；JSON 不合法回传错误重试一次；补丁失败回退重写；JSON 调用 60 秒超时，流式输出 45 秒无内容判定超时 |
+| 可观测性 | 结构化 JSON 日志（开始、完成、失败、耗时、错误码、上游状态码），请求 id 出现在响应头和前端错误消息 |
+| 健壮性 | SSE 心跳防止空闲断开；没收到 `done` 判定为连接中断；Error Boundary；分包加载失败自动刷新；环境变量缺失给出明确提示 |
+| 安全 | RLS 全表开启；Key 只在服务端；生成代码沙箱隔离；按账号限流，游客单独限额 |
+| 测试 | 单元测试（解析、补丁、团队组装、流水线、错误映射、SSE）；端到端测试（主流程、自定义智能体、游客模式、上游故障） |
+| CI | 每次推送执行 lint、类型检查、单元测试、构建 |
+| 开发体验 | 离线演示模型，不消耗 token 跑通全流程；需求里写 `[[模拟服务异常]]` 可以演示错误处理 |
 
 ## 完成度
 
-已完成：
-- 注册登录、项目增删查、多智能体流式生成、实时预览、对话迭代、版本历史与恢复、手动编辑、发布分享、Remix、运行错误一键修复、导出 HTML、手机尺寸预览、移动端布局
-- 智能体框架：统一 Agent 接口、流水线运行器；按账号授权的自定义智能体（管理页面、模板、启停、行级权限隔离）
-- 单元测试（Vitest，15 项，覆盖输出解析、补丁、团队组装与流水线），以及覆盖"注册 → 生成 → 数据持久化 → 迭代 → 回滚 → 发布 → 匿名访问 → Remix"、"自定义智能体创建、出场、停用、跨账号隔离""游客生成并绑定邮箱"三组端到端测试（Playwright）
+已完成：注册登录与游客模式、项目管理、多智能体流式生成、意图路由、实时预览、生成应用数据持久化、对话迭代、版本历史与恢复、手动编辑、运行错误一键修复、发布分享、Remix、导出 HTML、手机尺寸预览、移动端布局、按账号的自定义智能体、统一错误处理、测试与 CI。
 
-未完成：
-- 生成多文件 / React 工程
-- 图片、截图作为需求输入
-- 协作编辑与评论
-- 自定义域名发布
+未完成（有意取舍，见 [技术决策记录](docs/decisions.md)）：多文件 / React 工程、图片输入、协作编辑、自定义域名、生成任务断线恢复。
 
-## 如果继续投入，按优先级
+## 未来扩展
 
-1. **生成质量**：在工程师之后加一个 QA 智能体，用无头浏览器打开预览、截图并检查报错，自动修复后再交付。现在的"一键修复"需要用户手动触发。
-2. **可视化编辑**：在预览里点选元素直接提修改（把元素的选择器和上下文带进提示词），比纯文字描述更精确。
-3. **多文件工程**：引入 WebContainer 或服务端构建，支持 React 等框架和 npm 依赖，以及一键部署到 Vercel 或 Netlify。
-4. **生成应用的云端数据**：为生成的应用提供一个按项目隔离的 KV 或表存储 API，让发布出去的应用也能多人共享数据。
-5. **模板市场**：已发布的应用可以按热度展示，Remix 次数作为排序信号。
+现有的 `Agent` 接口、`AgentIO` 能力、共享上下文、SSE 事件协议、预览运行时和迁移机制都是扩展点。按优先级：
 
-## 本地开发
+1. **P0 生成更可靠**：QA 智能体用无头浏览器自动验收并循环修复；生成任务持久化，刷新可恢复；按角色选模型与多供应商降级。
+2. **P1 交互更自然**：预览中点选元素修改；需求澄清卡片；PRD 随迭代演进；图片输入。
+3. **P2 平台更开放**：智能体市场、智能体工具调用、多文件工程、生成应用的云端数据、一键部署。
+4. **P3 协作与商业化**：多人协作、版本分支、按 token 计费。
+
+每一项的做法和改动落点见 [未来扩展](docs/roadmap.md)。
+
+## 快速开始
 
 ```bash
 npm install
-cp .env.example .env.local   # 填入 Supabase 和 DeepSeek 配置
+cp .env.example .env.local   # 不填 DEEPSEEK_API_KEY 时自动使用离线演示模型
 npm run dev
 ```
 
-1. 在 Supabase 控制台的 SQL Editor 执行 [`supabase/schema.sql`](supabase/schema.sql)，可以重复执行。如果之前执行过旧版本，按顺序执行 [`supabase/migrations/`](supabase/migrations) 下的增量脚本。
-2. 在 Authentication → Sign In / Providers 中关闭 Email 的 **Confirm email**（注册后即可直接登录），并打开 **Allow anonymous sign-ins**（游客模式；不开启时未登录用户会被引导到登录页）。
-3. 不配置 `DEEPSEEK_API_KEY`（或设置 `LLM_MOCK=1`）时，会使用离线演示模型。它的输出格式和真实模型一致，不消耗 token 就能跑通全流程，编辑器顶部会显示"离线演示模型"标记。
-
-### 测试
-
-```bash
-npm test             # 单元测试
-npm run build
-npm run test:e2e     # 端到端测试，需要可用的 Supabase 和 LLM_MOCK=1
-```
-
-## 部署（Vercel）
-
-1. 在 Vercel 导入本仓库，框架选 Next.js。
-2. 配置环境变量 `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`DEEPSEEK_API_KEY`。
-3. 部署完成后，在 Supabase 的 Authentication → URL Configuration 把 Site URL 设为线上域名。
-
-生成接口声明了 `maxDuration = 300`，并通过 SSE 持续推送，长时间生成不会被中途断开。
+在 Supabase SQL Editor 执行 [`supabase/schema.sql`](supabase/schema.sql)，并在 Authentication 中关闭 Confirm email、打开匿名登录。完整步骤、测试与部署见 [开发与部署](docs/development.md)。
 
 ## 目录结构
 
@@ -157,16 +118,28 @@ src/
 │  ├─ page.tsx                 首页
 │  ├─ login/                   登录注册
 │  ├─ dashboard/               工作台
+│  ├─ agents/                  我的智能体
 │  ├─ project/[id]/            编辑器
 │  ├─ p/[slug]/                公开访问与 Remix
 │  └─ api/generate/route.ts    SSE 生成接口
 ├─ components/                 预览、代码编辑器、对话气泡、卡片等
 ├─ lib/
-│  ├─ agents/                  schema、提示词、解析器、LLM 适配、编排
+│  ├─ agents/
+│  │  ├─ core/                 Agent 接口、工厂函数、流水线运行器
+│  │  ├─ team/                 内置成员与团队组装
+│  │  └─ ...                   提示词、schema、解析器、LLM 适配、离线模型、编排
 │  ├─ supabase/                浏览器端与服务端客户端
 │  ├─ runtime.ts               预览运行时
+│  ├─ errors.ts                错误码与日志
+│  ├─ sse.ts                   前端 SSE 客户端
 │  └─ versions.ts              版本写入
 └─ middleware.ts               会话刷新与路由守卫
-supabase/schema.sql            表结构与 RLS
+supabase/                      表结构、RLS 与增量迁移
+docs/                          设计文档
+.github/workflows/ci.yml       CI
 tests/                         单元测试与端到端测试
 ```
+
+## 关于 AI 工具
+
+开发过程使用 Claude Code 辅助，方案（技术选型、数据库、模块与 commit 划分）先确认再实现，每个功能一个独立 commit，详见提交历史。
