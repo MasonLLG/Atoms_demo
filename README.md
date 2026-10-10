@@ -53,6 +53,32 @@ Supabase Postgres
 | Alex 工程师（首次） | 需求 + PRD + 技术方案 | 完整单文件 HTML | 分隔标记包裹的纯文本，流式 |
 | Alex 工程师（迭代） | 当前代码 + 最近对话 + 修改要求 | SEARCH/REPLACE 补丁 | 纯文本，流式 |
 
+### 智能体框架与扩展
+
+编排器只依赖一个最小接口，新增角色不需要改主流程（[`src/lib/agents/core`](src/lib/agents/core)）：
+
+```ts
+interface Agent {
+  id: string;
+  profile: AgentProfile;            // 名字、头衔、颜色、头像
+  startStatus: string;
+  when?(ctx: AgentContext): boolean; // 是否出场（如只在首次生成时出场）
+  run(ctx: AgentContext, io: AgentIO): Promise<AgentResult>;
+}
+```
+
+- **AgentContext（黑板）**：本次生成的需求、当前代码、对话摘要、出场成员，以及各成员写入的结构化产物（`artifacts`）和留给后续成员的笔记（`notes`）。
+- **AgentIO（运行时能力）**：`json()`（schema 校验和重试）、`stream()`（流式推送到前端）、`status()`、`emit()`。智能体不接触 SSE 和消息持久化，这些由流水线运行器 `runPipeline` 统一负责。
+- **工厂函数**：`defineJsonAgent`（产品经理、架构师都用它定义，几行配置就是一个角色）、`defineStaticAgent`（团队负责人）。工程师逻辑较复杂（补丁和回退），直接实现接口。
+- **自定义智能体**：`defineCustomAgent(config)` 接收纯数据配置（id、名字、头衔、颜色、职责说明、出场流程、插入位置），配置可以序列化，将来可以直接存进数据库，由用户在界面上创建。它的建议会写入 `notes`，自动进入工程师的上下文。现在可以通过环境变量 `CUSTOM_AGENTS` 启用，例如加一位"无障碍顾问"：
+
+```json
+[{ "id": "a11y", "name": "Iris", "title": "无障碍顾问", "color": "#06b6d4",
+   "instructions": "检查对比度、键盘操作与语义化标签", "after": "architect", "flows": ["create", "edit"] }]
+```
+
+  自定义智能体的形象随消息保存，刷新后对话里依然能正确显示；数据库的 `messages.role` 也已经放宽为任意合法的智能体 id（见 [`supabase/migrations/002_custom_agents.sql`](supabase/migrations/002_custom_agents.sql)）。
+
 ### 结构化输出的取舍
 
 - **规划类产出用 JSON**：zod schema 是唯一事实来源，`z.toJSONSchema` 生成给模型看的 Schema，配合 DeepSeek 的 JSON 模式输出，服务端再用同一个 schema 校验。校验失败时把错误信息回传给模型重试一次。
@@ -79,7 +105,8 @@ Supabase Postgres
 
 已完成：
 - 注册登录、项目增删查、多智能体流式生成、实时预览、对话迭代、版本历史与恢复、手动编辑、发布分享、Remix、运行错误一键修复、导出 HTML、手机尺寸预览、移动端布局
-- 解析器单元测试（Vitest，9 项），以及覆盖"注册 → 生成 → 数据持久化 → 迭代 → 回滚 → 发布 → 匿名访问 → Remix"的端到端测试（Playwright）
+- 智能体框架：统一 Agent 接口、流水线运行器、自定义智能体扩展点
+- 单元测试（Vitest，14 项，覆盖输出解析、补丁、团队组装与流水线），以及覆盖"注册 → 生成 → 数据持久化 → 迭代 → 回滚 → 发布 → 匿名访问 → Remix"的端到端测试（Playwright）
 
 未完成：
 - 生成多文件 / React 工程
