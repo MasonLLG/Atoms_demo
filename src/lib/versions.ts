@@ -22,7 +22,7 @@ export async function saveVersion(
     .insert({ project_id: projectId, user_id: userId, number, html, summary, source })
     .select("id, number, created_at")
     .single();
-  if (error || !data) throw new Error(`保存版本失败：${error?.message}`);
+  if (error || !data) throw new Error(`保存版本失败：${error?.message ?? "未知错误"}`);
   await supabase
     .from("projects")
     .update({ current_version_id: data.id, updated_at: new Date().toISOString() })

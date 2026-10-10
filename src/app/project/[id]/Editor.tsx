@@ -27,7 +27,7 @@ import { Preview } from "@/components/Preview";
 import type { GenEvent } from "@/lib/agents/events";
 import { extractHtml } from "@/lib/agents/extract";
 import { saveAppData } from "@/lib/runtime";
-import { streamGenerate } from "@/lib/sse";
+import { GenerateError, streamGenerate } from "@/lib/sse";
 import { createClient } from "@/lib/supabase/client";
 import type { Message, Project } from "@/lib/types";
 import { saveVersion } from "@/lib/versions";
@@ -131,6 +131,7 @@ export function Editor({ userId, isGuest, project: initialProject, initialMessag
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       let flow: "create" | "edit" = "create";
+      let failed = false;
       let engineerText = "";
 
       const onEvent = (e: GenEvent) => {
@@ -187,9 +188,17 @@ export function Editor({ userId, isGuest, project: initialProject, initialMessag
             break;
           }
           case "error":
+            failed = true;
             setItems((l) => [
               ...l.map((it) => (it.streaming ? { ...it, streaming: false, content: "已中断", streamText: undefined } : it)),
-              { id: nanoid(), role: "system", content: `生成失败：${e.message}`, error: true },
+              {
+                id: nanoid(),
+                role: "system",
+                content: e.code === "CANCELLED" ? e.message : `生成失败：${e.message}`,
+                error: e.code !== "CANCELLED",
+                retryPrompt: e.retryable ? prompt : undefined,
+                requestId: e.code === "CANCELLED" ? undefined : e.requestId,
+              },
             ]);
             break;
         }
@@ -199,10 +208,20 @@ export function Editor({ userId, isGuest, project: initialProject, initialMessag
         await streamGenerate({ projectId: project.id, prompt }, onEvent, ctrl.signal);
       } catch (err) {
         const aborted = (err as Error).name === "AbortError";
-        setItems((l) => [
-          ...l.map((it) => (it.streaming ? { ...it, streaming: false, content: "已停止", streamText: undefined } : it)),
-          { id: nanoid(), role: "system", content: aborted ? "已停止生成" : (err as Error).message, error: !aborted },
-        ]);
+        const ge = err instanceof GenerateError ? err : null;
+        if (!failed) {
+          setItems((l) => [
+            ...l.map((it) => (it.streaming ? { ...it, streaming: false, content: aborted ? "已停止" : "已中断", streamText: undefined } : it)),
+            {
+              id: nanoid(),
+              role: "system",
+              content: aborted ? "已停止生成" : (err as Error).message || "生成失败，请重试",
+              error: !aborted,
+              retryPrompt: aborted || ge?.retryable !== false ? prompt : undefined,
+              requestId: ge?.requestId,
+            },
+          ]);
+        }
       } finally {
         setRunning(false);
         setLiveCode(null);
@@ -414,7 +433,7 @@ export function Editor({ userId, isGuest, project: initialProject, initialMessag
               <div className="pt-10 text-center text-sm text-muted">描述你想要的应用，AI 团队会帮你实现</div>
             )}
             {items.map((it) => (
-              <MessageBubble key={it.id} item={it} onOpenVersion={openVersion} />
+              <MessageBubble key={it.id} item={it} onOpenVersion={openVersion} onRetry={running ? undefined : send} />
             ))}
             <div ref={chatEndRef} />
           </div>

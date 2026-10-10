@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
+import { AppError } from "../../errors";
 import type { GenEvent } from "../events";
 import type { LLM } from "../llm";
 import type { Agent, AgentContext, AgentIO } from "./types";
@@ -19,7 +20,7 @@ export async function runPipeline(agents: Agent[], ctx: AgentContext, deps: Runn
   const active = agents.filter((a) => !a.when || a.when(ctx));
   ctx.team = active.map((a) => ({ id: a.id, profile: a.profile }));
   for (const agent of active) {
-    if (deps.signal?.aborted) throw new Error("已取消");
+    if (deps.signal?.aborted) throw new AppError("CANCELLED");
 
     deps.emit({ type: "agent_start", agent: agent.id, status: agent.startStatus, profile: agent.profile });
     const result = await agent.run(ctx, createIO(agent, deps));
@@ -63,7 +64,7 @@ export async function callJson<T>(llm: LLM, system: string, user: string, schema
       lastError = `JSON 解析失败：${(e as Error).message}`;
     }
   }
-  throw new Error(`模型输出格式错误：${lastError}`);
+  throw new AppError("LLM_BAD_OUTPUT", `模型输出格式不符合要求（${lastError}），请重试`);
 }
 
 async function streamWithDeltas(

@@ -1,4 +1,5 @@
 // 未配置 API Key 时使用的离线演示模型：输出格式与真实模型完全一致，便于本地开发与测试
+import { APIError } from "openai";
 import { FILE_END, FILE_START } from "./extract";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -8,8 +9,18 @@ function pickPrompt(user: string) {
   return (m ? m[1] : user).trim().slice(0, 60);
 }
 
+// 仅离线演示模型生效：需求里带上这个标记时模拟上游 503，用于端到端测试错误处理与重试
+export const MOCK_FAIL_MARKER = "[[模拟服务异常]]";
+
+function maybeFail(user: string) {
+  if (user.includes(MOCK_FAIL_MARKER)) {
+    throw APIError.generate(503, { error: { message: "mock upstream unavailable" } }, "mock upstream unavailable", new Headers());
+  }
+}
+
 export async function mockJson(system: string, user: string): Promise<string> {
   await sleep(600);
+  maybeFail(user);
   if (system.includes("你是 Mike")) {
     const msg = (user.match(/用户的新消息：([\s\S]*)$/)?.[1] ?? user).trim();
     const chat = /^(你好|您好|hi|hello|在吗|嗨|你们能做什么)[!！。.？?]*$/i.test(msg) || /怎么用|是什么|为什么/.test(msg);
@@ -54,6 +65,7 @@ export async function mockJson(system: string, user: string): Promise<string> {
 }
 
 export async function mockStream(system: string, user: string, onDelta: (t: string) => void): Promise<string> {
+  maybeFail(user);
   const isEdit = system.includes("SEARCH/REPLACE") && !system.includes("输出修改后的完整文件");
   const prompt = pickPrompt(user);
   const text = isEdit ? mockPatch(prompt) : `SUMMARY: 完成了「${prompt}」的第一版（离线演示模型）\n${FILE_START}\n${mockHtml(prompt)}\n${FILE_END}`;

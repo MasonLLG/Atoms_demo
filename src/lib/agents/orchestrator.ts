@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AppError } from "../errors";
 import type { Project } from "../types";
 import type { Agent, AgentContext } from "./core/types";
 import { runPipeline } from "./core/runner";
@@ -37,7 +38,7 @@ export async function runGeneration(opts: RunOptions) {
       data: data ?? null,
       version_id: versionId ?? null,
     });
-    if (error) throw new Error(`保存消息失败：${error.message}`);
+    if (error) throw new AppError("DB_ERROR", undefined, { cause: error });
   };
 
   await saveMessage("user", prompt);
@@ -72,7 +73,7 @@ export async function runGeneration(opts: RunOptions) {
     saveMessage,
     isBuiltin: isBuiltinAgent,
   });
-  if (!ctx.output && !ctx.halted) throw new Error("本次生成没有产出新版本");
+  if (!ctx.output && !ctx.halted) throw new AppError("INTERNAL", "本次生成没有产出新版本，请重试");
 }
 
 async function recentHistory(supabase: SupabaseClient, projectId: string) {

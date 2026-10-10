@@ -34,6 +34,14 @@ test("注册 → 生成 → 数据持久化 → 迭代 → 回滚 → 发布 →
   await expect(page.getByRole("button", { name: "版本 v2" })).toBeVisible({ timeout: 60_000 });
   await expect(page.frameLocator('iframe[title="应用预览"]').getByText("已更新：把页脚改成版权信息")).toBeVisible();
 
+  // 上游模型异常时给出友好提示、请求 id 和重试按钮，不会卡在生成中
+  await page.getByPlaceholder(/继续描述/).fill("加个按钮 [[模拟服务异常]]");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("生成失败：模型服务暂时不可用，请稍后重试")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  await expect(page.getByText(/#[0-9a-f]{8}/)).toBeVisible();
+  await expect(page.getByPlaceholder(/继续描述/)).toBeEnabled();
+
   // 查看历史版本并恢复
   await page.getByRole("button", { name: "版本 v1" }).click();
   await expect(page.getByText("正在查看历史版本 v1")).toBeVisible();

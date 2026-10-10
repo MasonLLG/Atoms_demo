@@ -1,3 +1,4 @@
+import { AppError } from "../../errors";
 import { BUILTIN_PROFILES } from "../../types";
 import { saveVersion } from "../../versions";
 import type { Agent, AgentContext } from "../core/types";
@@ -54,9 +55,11 @@ export const engineer: Agent = {
         summary = extractSummary(full) || summary;
       }
     }
-    if (!html) throw new Error("工程师没有输出有效的 HTML，请重试");
+    if (!html) throw new AppError("LLM_BAD_OUTPUT", "工程师没有输出有效的 HTML，请重试");
 
-    const version = await saveVersion(io.supabase, ctx.project.id, ctx.userId, html, summary, "agent");
+    const version = await saveVersion(io.supabase, ctx.project.id, ctx.userId, html, summary, "agent").catch((e) => {
+      throw new AppError("DB_ERROR", undefined, { cause: e });
+    });
     ctx.output = { html, summary, versionId: version.id, versionNumber: version.number };
     io.emit({ type: "version_saved", version: { ...version, summary, html } });
     return { content: summary, versionId: version.id };

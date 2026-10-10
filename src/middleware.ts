@@ -1,14 +1,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseEnv } from "./lib/env";
 
 const PROTECTED = ["/dashboard", "/project", "/agents"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  let env: ReturnType<typeof getSupabaseEnv>;
+  try {
+    env = getSupabaseEnv();
+  } catch (e) {
+    return new NextResponse((e as Error).message, { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    env.url,
+    env.anonKey,
     {
       cookies: {
         getAll() {
