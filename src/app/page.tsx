@@ -54,6 +54,7 @@ export default async function Home() {
         </p>
         <div className="mt-10 w-full">
           <PromptBox autoFocus />
+          {!user && <p className="mt-3 text-xs text-muted">无需注册，直接开始体验；想保留作品时再绑定邮箱即可</p>}
         </div>
 
         <section className="mt-20 w-full text-left">

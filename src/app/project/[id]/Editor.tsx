@@ -20,6 +20,7 @@ import {
 import { nanoid } from "nanoid";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GuestBanner } from "@/components/BindAccount";
 import { MessageBubble, type ChatItem } from "@/components/chat/MessageBubble";
 import { CodeEditor } from "@/components/CodeEditor";
 import { Preview } from "@/components/Preview";
@@ -41,6 +42,7 @@ export interface VersionMeta {
 
 interface Props {
   userId: string;
+  isGuest: boolean;
   project: Project;
   initialMessages: Message[];
   initialVersions: VersionMeta[];
@@ -49,7 +51,7 @@ interface Props {
 
 const SOURCE_LABEL: Record<string, string> = { agent: "AI 生成", manual: "手动编辑", restore: "版本恢复", remix: "Remix" };
 
-export function Editor({ userId, project: initialProject, initialMessages, initialVersions, initialHtml }: Props) {
+export function Editor({ userId, isGuest, project: initialProject, initialMessages, initialVersions, initialHtml }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [project, setProject] = useState(initialProject);
   const [versions, setVersions] = useState(initialVersions);
@@ -295,6 +297,11 @@ export function Editor({ userId, project: initialProject, initialMessages, initi
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{project.name}</div>
         </div>
+        {isGuest && (
+          <span className="hidden sm:inline">
+            <GuestBanner compact />
+          </span>
+        )}
         {mode === "mock" && (
           <span className="hidden rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300 sm:inline" title="服务端未配置 API Key">
             离线演示模型

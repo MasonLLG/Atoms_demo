@@ -34,7 +34,8 @@ export async function middleware(request: NextRequest) {
     url.search = `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
-  if (user && path === "/login") {
+  // 游客（匿名用户）可以进入登录页，用已有账号登录或注册
+  if (user && !user.is_anonymous && path === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

@@ -21,7 +21,7 @@ export default async function AgentsPage() {
   return (
     <AgentManager
       userId={user.id}
-      email={user.email ?? ""}
+      email={user.is_anonymous ? "游客" : (user.email ?? "")}
       initialAgents={(data ?? []) as CustomAgentRow[]}
       setupError={error ? "数据库还没有自定义智能体表，请先执行 supabase/migrations/003_user_custom_agents.sql" : null}
     />

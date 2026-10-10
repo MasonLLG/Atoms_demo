@@ -4,6 +4,7 @@ import { Bot, Globe, LogOut, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { GuestBanner } from "@/components/BindAccount";
 import { Logo } from "@/components/Logo";
 import { PromptBox } from "@/components/PromptBox";
 import { Thumbnail } from "@/components/Thumbnail";
@@ -21,7 +22,7 @@ export interface ProjectCard {
   versionNumber: number | null;
 }
 
-export function Dashboard({ email, projects: initial }: { email: string; projects: ProjectCard[] }) {
+export function Dashboard({ email, isGuest, projects: initial }: { email: string; isGuest: boolean; projects: ProjectCard[] }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initial);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -56,15 +57,20 @@ export function Dashboard({ email, projects: initial }: { email: string; project
             <Link href="/agents" className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-white/5 hover:text-fg">
               <Bot className="h-4 w-4" /> 我的智能体
             </Link>
-            <span className="hidden sm:inline">{email}</span>
+            <span className="hidden sm:inline">{isGuest ? "游客" : email}</span>
             <button onClick={logout} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-white/5 hover:text-fg">
-              <LogOut className="h-4 w-4" /> 退出
+              <LogOut className="h-4 w-4" /> {isGuest ? "退出游客" : "退出"}
             </button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-5 py-10">
+        {isGuest && (
+          <div className="mb-8">
+            <GuestBanner />
+          </div>
+        )}
         <section className="mx-auto max-w-3xl text-center">
           <h1 className="text-2xl font-semibold sm:text-3xl">今天想做点什么？</h1>
           <p className="mt-2 text-sm text-muted">描述一个应用，或者从下面的模板开始</p>

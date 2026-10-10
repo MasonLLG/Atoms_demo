@@ -13,15 +13,22 @@ export const TEMPLATES = [
   { icon: "📝", title: "Markdown 笔记", prompt: "做一个 Markdown 笔记本，左侧笔记列表，右侧编辑与实时预览，支持搜索" },
 ];
 
-/** 创建空项目并跳转到编辑器，编辑器会自动把 prompt 发给智能体团队 */
+/**
+ * 创建空项目并跳转到编辑器，编辑器会自动把 prompt 发给智能体团队。
+ * 未登录时自动以游客身份（Supabase 匿名登录）继续；项目未开启匿名登录时回退到登录页。
+ */
 export async function createProjectFromPrompt(prompt: string) {
   const supabase = createClient();
-  const {
+  let {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    sessionStorage.setItem(PENDING_PROMPT_KEY, prompt);
-    return "/login?next=/dashboard";
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error || !data.user) {
+      sessionStorage.setItem(PENDING_PROMPT_KEY, prompt);
+      return "/login?next=/dashboard";
+    }
+    user = data.user;
   }
   const { data, error } = await supabase
     .from("projects")

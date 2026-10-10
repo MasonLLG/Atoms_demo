@@ -15,6 +15,8 @@ const Body = z.object({
 });
 
 const DAILY_LIMIT = Number(process.env.DAILY_GENERATION_LIMIT || 40);
+// 游客无需注册即可体验，额度单独、更低
+const GUEST_DAILY_LIMIT = Number(process.env.GUEST_DAILY_GENERATION_LIMIT || 10);
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -38,8 +40,10 @@ export async function POST(request: Request) {
     .eq("user_id", user.id)
     .eq("role", "user")
     .gte("created_at", since);
-  if ((count ?? 0) >= DAILY_LIMIT) {
-    return NextResponse.json({ error: `今日生成次数已达上限（${DAILY_LIMIT} 次），明天再来吧` }, { status: 429 });
+  const limit = user.is_anonymous ? GUEST_DAILY_LIMIT : DAILY_LIMIT;
+  if ((count ?? 0) >= limit) {
+    const tip = user.is_anonymous ? "，绑定邮箱后可获得更多额度" : "，明天再来吧";
+    return NextResponse.json({ error: `今日生成次数已达上限（${limit} 次）${tip}` }, { status: 429 });
   }
 
   const encoder = new TextEncoder();

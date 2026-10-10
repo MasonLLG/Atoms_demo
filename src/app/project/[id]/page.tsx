@@ -34,6 +34,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <Editor
       userId={user.id}
+      isGuest={!!user.is_anonymous}
       project={project as Project}
       initialMessages={(messages ?? []) as Message[]}
       initialVersions={(versions ?? []) as VersionMeta[]}

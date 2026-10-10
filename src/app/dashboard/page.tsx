@@ -31,5 +31,5 @@ export default async function DashboardPage() {
     };
   });
 
-  return <Dashboard email={user.email ?? ""} projects={projects} />;
+  return <Dashboard email={user.email ?? ""} isGuest={!!user.is_anonymous} projects={projects} />;
 }
