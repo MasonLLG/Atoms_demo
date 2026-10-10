@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, LogOut, Trash2 } from "lucide-react";
+import { Bot, Globe, LogOut, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -53,6 +53,9 @@ export function Dashboard({ email, projects: initial }: { email: string; project
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
           <Logo href="/dashboard" />
           <div className="flex items-center gap-3 text-sm text-muted">
+            <Link href="/agents" className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-white/5 hover:text-fg">
+              <Bot className="h-4 w-4" /> 我的智能体
+            </Link>
             <span className="hidden sm:inline">{email}</span>
             <button onClick={logout} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-white/5 hover:text-fg">
               <LogOut className="h-4 w-4" /> 退出
