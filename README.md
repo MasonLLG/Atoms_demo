@@ -2,7 +2,7 @@
 
 用一句话描述需求，一支 AI 团队（团队负责人、产品经理、架构师、工程师）协作生成可运行的网页应用，并在浏览器里实时预览、对话迭代、版本回滚、一键发布。
 
-- 在线体验：部署后填写
+- 在线体验：https://atomsdemo1-five.vercel.app
 - 技术栈：Next.js 15（App Router）· React 19 · TypeScript · Tailwind CSS 4 · Supabase（Auth + Postgres + RLS）· DeepSeek（OpenAI 兼容协议）· Vercel
 
 ## 功能一览
