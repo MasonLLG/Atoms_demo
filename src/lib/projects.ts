@@ -25,8 +25,9 @@ export async function createProjectFromPrompt(prompt: string) {
   if (!user) {
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.user) {
+      console.warn("[guest] 匿名登录失败，回退到登录页：", error?.message);
       sessionStorage.setItem(PENDING_PROMPT_KEY, prompt);
-      return "/login?next=/dashboard";
+      return `/login?next=/dashboard&guest_error=${encodeURIComponent(error?.message || "unknown")}`;
     }
     user = data.user;
   }

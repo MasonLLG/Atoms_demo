@@ -16,7 +16,10 @@ export function AuthForm() {
   const [notice, setNotice] = useState("");
 
   const next = params.get("next") || "/dashboard";
-  const hint = next.startsWith("/agents")
+  const guestError = params.get("guest_error");
+  const hint = guestError
+    ? `游客模式暂不可用（${guestError}），请先登录或注册，你的需求会在登录后自动开始生成`
+    : next.startsWith("/agents")
     ? "登录后即可创建只属于你的智能体，并决定它们在流水线中的出场位置"
     : next.startsWith("/p/")
       ? "登录后即可把这个应用 Remix 到你的工作区"
