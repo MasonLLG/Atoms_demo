@@ -20,8 +20,9 @@ interface RunOptions {
 
 /**
  * 一次生成：准备共享上下文，组装团队，然后交给流水线执行。
+ * - Mike 先判断意图：闲聊或提问时直接回答并结束流水线
  * - 首次生成：Mike → Emma（PRD）→ Bob（技术方案）→ [自定义智能体] → Alex（写代码）
- * - 迭代修改：[声明参与迭代的自定义智能体] → Alex（补丁）
+ * - 迭代修改：Mike → [声明参与迭代的自定义智能体] → Alex（补丁）
  * 每个成员是否出场由它自己的 when() 决定。
  */
 export async function runGeneration(opts: RunOptions) {
@@ -56,7 +57,7 @@ export async function runGeneration(opts: RunOptions) {
     flow,
     currentHtml,
     team: [],
-    history: flow === "edit" ? await recentHistory(supabase, project.id) : "",
+    history: await recentHistory(supabase, project.id),
     artifacts: {},
     notes: [],
   };
@@ -71,7 +72,7 @@ export async function runGeneration(opts: RunOptions) {
     saveMessage,
     isBuiltin: isBuiltinAgent,
   });
-  if (!ctx.output) throw new Error("本次生成没有产出新版本");
+  if (!ctx.output && !ctx.halted) throw new Error("本次生成没有产出新版本");
 }
 
 async function recentHistory(supabase: SupabaseClient, projectId: string) {
@@ -79,13 +80,13 @@ async function recentHistory(supabase: SupabaseClient, projectId: string) {
     .from("messages")
     .select("role, content")
     .eq("project_id", projectId)
-    .in("role", ["user", "engineer"])
+    .in("role", ["user", "leader", "engineer"])
     .order("created_at", { ascending: false })
     .limit(7);
   // 最新一条是刚保存的本次请求，去掉
   return (data ?? [])
     .slice(1)
     .reverse()
-    .map((m) => `${m.role === "user" ? "用户" : "Alex"}：${m.content}`)
+    .map((m) => `${{ user: "用户", leader: "Mike", engineer: "Alex" }[m.role as string] ?? m.role}：${m.content}`)
     .join("\n");
 }

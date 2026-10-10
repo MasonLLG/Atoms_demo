@@ -105,6 +105,27 @@ describe("runGeneration", () => {
     expect(msgs.find((m) => m.role === "engineer")?.version_id).toBe("ver-1");
   });
 
+  it("Mike 判断为闲聊时直接回答并结束流水线，不产生版本", async () => {
+    const { client, inserts } = fakeSupabase();
+    const events: GenEvent[] = [];
+    const project = { id: "p1", user_id: "u1", current_version_id: null } as Project;
+    await runGeneration({
+      supabase: client,
+      llm: { mode: "mock", json: mockJson, stream: mockStream },
+      userId: "u1",
+      project,
+      prompt: "你好",
+      emit: (e) => events.push(e),
+      team: buildTeam(),
+    });
+    const started = events.filter((e) => e.type === "agent_start").map((e) => (e as { agent: string }).agent);
+    expect(started).toEqual(["leader"]);
+    expect(events.some((e) => e.type === "version_saved")).toBe(false);
+    expect(inserts.filter((i) => i.table === "versions")).toHaveLength(0);
+    const reply = inserts.find((i) => i.table === "messages" && i.row.role === "leader")?.row.content;
+    expect(reply).toContain("想做什么应用");
+  });
+
   it("没有产出版本时报错", async () => {
     const { client } = fakeSupabase();
     const project = { id: "p1", user_id: "u1", current_version_id: null } as Project;

@@ -10,6 +10,15 @@ function pickPrompt(user: string) {
 
 export async function mockJson(system: string, user: string): Promise<string> {
   await sleep(600);
+  if (system.includes("你是 Mike")) {
+    const msg = (user.match(/用户的新消息：([\s\S]*)$/)?.[1] ?? user).trim();
+    const chat = /^(你好|您好|hi|hello|在吗|嗨|你们能做什么)[!！。.？?]*$/i.test(msg) || /怎么用|是什么|为什么/.test(msg);
+    return JSON.stringify(
+      chat
+        ? { intent: "chat", reply: "你好！我是 Mike（离线演示模型）。告诉我你想做什么应用吧，比如番茄钟、记账本或者贪吃蛇小游戏。" }
+        : { intent: "build", reply: `明白，「${msg.slice(0, 30)}」，马上安排（离线演示模型）。` },
+    );
+  }
   if (system.includes("Emma")) {
     const p = user.trim().slice(0, 40);
     return JSON.stringify({

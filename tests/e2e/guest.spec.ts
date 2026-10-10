@@ -6,9 +6,15 @@ test("游客无需注册即可生成，绑定邮箱后作品保留", async ({ pa
   // 未登录直接在首页提问，不经过登录页
   await page.goto("/");
   await expect(page.getByText("无需注册，直接开始体验")).toBeVisible();
-  await page.getByPlaceholder(/描述你想要的应用/).fill("做一个喝水记录小工具");
+  await page.getByPlaceholder(/描述你想要的应用/).fill("你好");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/project\//, { timeout: 15_000 });
+
+  // 打招呼时 Mike 直接回答，不启动开发
+  await expect(page.getByText("告诉我你想做什么应用吧")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Emma")).toHaveCount(0);
+  await page.getByPlaceholder(/描述你想要的应用/).fill("做一个喝水记录小工具");
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "版本 v1" })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: /游客 · 绑定邮箱/ })).toBeVisible();
 

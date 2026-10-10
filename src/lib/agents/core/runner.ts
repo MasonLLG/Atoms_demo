@@ -28,6 +28,10 @@ export async function runPipeline(agents: Agent[], ctx: AgentContext, deps: Runn
     const data = builtin ? result.data : { ...(isObject(result.data) ? result.data : {}), _agent: agent.profile };
     await deps.saveMessage(agent.id, result.content, data, result.versionId);
     deps.emit({ type: "agent_done", agent: agent.id, content: result.content, data });
+    if (result.halt) {
+      ctx.halted = true;
+      return;
+    }
   }
 }
 

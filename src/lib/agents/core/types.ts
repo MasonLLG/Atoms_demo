@@ -39,6 +39,8 @@ export interface AgentContext {
   artifacts: Record<string, unknown>;
   /** 供后续成员参考的自由文本笔记 */
   notes: AgentNote[];
+  /** 流水线是否被某个成员主动结束 */
+  halted?: boolean;
   /** 本次生成产出的新版本 */
   output?: { html: string; summary: string; versionId: string; versionNumber: number };
 }
@@ -65,6 +67,8 @@ export interface AgentResult {
   data?: unknown;
   /** 若本次产出了新版本，关联到消息上 */
   versionId?: string;
+  /** 为 true 时流水线在本智能体之后结束（如负责人判断这只是闲聊或提问） */
+  halt?: boolean;
 }
 
 /**
