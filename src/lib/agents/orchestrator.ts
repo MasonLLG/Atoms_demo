@@ -4,7 +4,7 @@ import type { Agent, AgentContext } from "./core/types";
 import { runPipeline } from "./core/runner";
 import type { GenEvent } from "./events";
 import type { LLM } from "./llm";
-import { buildTeam, isBuiltinAgent, loadCustomAgents } from "./team";
+import { buildTeam, isBuiltinAgent, loadCustomAgents, loadUserAgents } from "./team";
 
 interface RunOptions {
   supabase: SupabaseClient;
@@ -14,12 +14,12 @@ interface RunOptions {
   prompt: string;
   emit: (e: GenEvent) => void;
   signal?: AbortSignal;
-  /** 不传则使用内置团队 + 环境变量中配置的自定义智能体 */
+  /** 不传则使用：内置团队 + 环境变量中的全局自定义智能体 + 当前用户启用的自定义智能体 */
   team?: Agent[];
 }
 
 /**
- * 一次生成：准备共享上下文，然后交给流水线执行。
+ * 一次生成：准备共享上下文，组装团队，然后交给流水线执行。
  * - 首次生成：Mike → Emma（PRD）→ Bob（技术方案）→ [自定义智能体] → Alex（写代码）
  * - 迭代修改：[声明参与迭代的自定义智能体] → Alex（补丁）
  * 每个成员是否出场由它自己的 when() 决定。
@@ -61,7 +61,9 @@ export async function runGeneration(opts: RunOptions) {
     notes: [],
   };
 
-  await runPipeline(opts.team ?? defaultTeam(), ctx, {
+  const team = opts.team ?? buildTeam([...loadCustomAgents(), ...(await loadUserAgents(supabase, userId))], { skipInvalid: true });
+
+  await runPipeline(team, ctx, {
     llm,
     supabase,
     emit,
@@ -70,15 +72,6 @@ export async function runGeneration(opts: RunOptions) {
     isBuiltin: isBuiltinAgent,
   });
   if (!ctx.output) throw new Error("本次生成没有产出新版本");
-}
-
-function defaultTeam() {
-  try {
-    return buildTeam(loadCustomAgents());
-  } catch (e) {
-    console.error("[agents] 自定义智能体配置无效，已回退为内置团队：", e);
-    return buildTeam();
-  }
 }
 
 async function recentHistory(supabase: SupabaseClient, projectId: string) {
