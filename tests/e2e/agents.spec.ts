@@ -14,6 +14,10 @@ test("自定义智能体按账号隔离，并参与该账号的生成", async ({
   await page.goto("/");
   await page.getByRole("link", { name: "登录后自定义" }).click();
   await expect(page.getByText("登录后即可创建只属于你的智能体")).toBeVisible();
+  // 登录页可以返回首页
+  await page.getByRole("link", { name: "返回首页" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("link", { name: "登录后自定义" }).click();
   await page.getByPlaceholder("you@example.com").fill(`agents-a-${stamp}@example.com`);
   await page.getByPlaceholder("至少 6 位").fill("test123456");
   await page.getByRole("button", { name: "创建账号" }).click();
