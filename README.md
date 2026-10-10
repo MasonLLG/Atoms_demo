@@ -18,6 +18,7 @@
 | 版本管理 | 每次生成、手动编辑、恢复都会存一个完整快照，可查看任意历史版本并恢复 |
 | 代码编辑 | 内置 Monaco 编辑器，手动修改后保存为新版本 |
 | 错误自愈 | 预览中捕获运行时错误，一键交给工程师修复 |
+| 自定义智能体 | 在「我的智能体」中为自己的账号创建团队成员（有模板），可启停、编辑；启用后参与该账号所有项目的生成 |
 | 发布与 Remix | 一键发布得到公开链接 `/p/{slug}`，任何人可访问；登录用户可 Remix 到自己的工作区继续改 |
 | 导出 | 下载当前版本的单文件 HTML |
 
@@ -70,14 +71,10 @@ interface Agent {
 - **AgentContext（黑板）**：本次生成的需求、当前代码、对话摘要、出场成员，以及各成员写入的结构化产物（`artifacts`）和留给后续成员的笔记（`notes`）。
 - **AgentIO（运行时能力）**：`json()`（schema 校验和重试）、`stream()`（流式推送到前端）、`status()`、`emit()`。智能体不接触 SSE 和消息持久化，这些由流水线运行器 `runPipeline` 统一负责。
 - **工厂函数**：`defineJsonAgent`（产品经理、架构师都用它定义，几行配置就是一个角色）、`defineStaticAgent`（团队负责人）。工程师逻辑较复杂（补丁和回退），直接实现接口。
-- **自定义智能体**：`defineCustomAgent(config)` 接收纯数据配置（id、名字、头衔、颜色、职责说明、出场流程、插入位置），配置可以序列化，将来可以直接存进数据库，由用户在界面上创建。它的建议会写入 `notes`，自动进入工程师的上下文。现在可以通过环境变量 `CUSTOM_AGENTS` 启用，例如加一位"无障碍顾问"：
-
-```json
-[{ "id": "a11y", "name": "Iris", "title": "无障碍顾问", "color": "#06b6d4",
-   "instructions": "检查对比度、键盘操作与语义化标签", "after": "architect", "flows": ["create", "edit"] }]
-```
-
-  自定义智能体的形象随消息保存，刷新后对话里依然能正确显示；数据库的 `messages.role` 也已经放宽为任意合法的智能体 id（见 [`supabase/migrations/002_custom_agents.sql`](supabase/migrations/002_custom_agents.sql)）。
+- **自定义智能体（按账号授权）**：登录用户在「我的智能体」页面（`/agents`）创建自己的团队成员，配置名字、头衔、颜色、职责说明、参与的流程（首次生成或迭代修改），以及出场位置（插在哪位内置成员之后）。页面提供无障碍顾问、文案专家、UI 设计师、安全审查四个模板，并实时预览出场顺序。
+  - 数据存在 `custom_agents` 表（[`migrations/003`](supabase/migrations/003_user_custom_agents.sql)），行级权限保证每个用户只能看到和使用自己的智能体。生成接口在当前用户的会话下读取其**已启用**的智能体，经 `defineCustomAgent` 校验后插入流水线；配置无效的单个智能体会被跳过，不影响整个团队。
+  - 自定义智能体输出结构化的建议清单，写入共享上下文的 `notes`，自动进入工程师的上下文；对话里显示为可展开的"某某的建议"卡片，形象随消息保存，刷新后依然正确。
+  - 运维层面还保留环境变量 `CUSTOM_AGENTS`，可以配置对所有用户生效的全局智能体。
 
 ### 结构化输出的取舍
 
@@ -105,8 +102,8 @@ interface Agent {
 
 已完成：
 - 注册登录、项目增删查、多智能体流式生成、实时预览、对话迭代、版本历史与恢复、手动编辑、发布分享、Remix、运行错误一键修复、导出 HTML、手机尺寸预览、移动端布局
-- 智能体框架：统一 Agent 接口、流水线运行器、自定义智能体扩展点
-- 单元测试（Vitest，14 项，覆盖输出解析、补丁、团队组装与流水线），以及覆盖"注册 → 生成 → 数据持久化 → 迭代 → 回滚 → 发布 → 匿名访问 → Remix"的端到端测试（Playwright）
+- 智能体框架：统一 Agent 接口、流水线运行器；按账号授权的自定义智能体（管理页面、模板、启停、行级权限隔离）
+- 单元测试（Vitest，14 项，覆盖输出解析、补丁、团队组装与流水线），以及覆盖"注册 → 生成 → 数据持久化 → 迭代 → 回滚 → 发布 → 匿名访问 → Remix"和"自定义智能体创建、出场、停用、跨账号隔离"两组端到端测试（Playwright）
 
 未完成：
 - 生成多文件 / React 工程
@@ -130,7 +127,7 @@ cp .env.example .env.local   # 填入 Supabase 和 DeepSeek 配置
 npm run dev
 ```
 
-1. 在 Supabase 控制台的 SQL Editor 执行 [`supabase/schema.sql`](supabase/schema.sql)，可以重复执行。
+1. 在 Supabase 控制台的 SQL Editor 执行 [`supabase/schema.sql`](supabase/schema.sql)，可以重复执行。如果之前执行过旧版本，按顺序执行 [`supabase/migrations/`](supabase/migrations) 下的增量脚本。
 2. 在 Authentication → Sign In / Providers → Email 关闭 **Confirm email**，注册后即可直接登录。
 3. 不配置 `DEEPSEEK_API_KEY`（或设置 `LLM_MOCK=1`）时，会使用离线演示模型。它的输出格式和真实模型一致，不消耗 token 就能跑通全流程，编辑器顶部会显示"离线演示模型"标记。
 
