@@ -10,11 +10,16 @@ async function signUp(page: Page, email: string) {
 
 test("自定义智能体按账号隔离，并参与该账号的生成", async ({ page, browser }) => {
   const stamp = Date.now();
-  await signUp(page, `agents-a-${stamp}@example.com`);
-
-  // 进入「我的智能体」，从模板创建 Iris
-  await page.getByRole("link", { name: "我的智能体" }).click();
+  // 未登录时从首页「登录后自定义」进入，注册后直接落到「我的智能体」
+  await page.goto("/");
+  await page.getByRole("link", { name: "登录后自定义" }).click();
+  await expect(page.getByText("登录后即可创建只属于你的智能体")).toBeVisible();
+  await page.getByPlaceholder("you@example.com").fill(`agents-a-${stamp}@example.com`);
+  await page.getByPlaceholder("至少 6 位").fill("test123456");
+  await page.getByRole("button", { name: "创建账号" }).click();
   await expect(page).toHaveURL(/\/agents/);
+
+  // 从模板创建 Iris
   await page.getByRole("button", { name: "Iris · 无障碍顾问" }).first().click();
   await page.getByRole("button", { name: "保存" }).click();
   await expect(page.getByText("从可访问性角度审查方案").first()).toBeVisible();

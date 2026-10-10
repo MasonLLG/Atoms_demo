@@ -16,6 +16,11 @@ export function AuthForm() {
   const [notice, setNotice] = useState("");
 
   const next = params.get("next") || "/dashboard";
+  const hint = next.startsWith("/agents")
+    ? "登录后即可创建只属于你的智能体，并决定它们在流水线中的出场位置"
+    : next.startsWith("/p/")
+      ? "登录后即可把这个应用 Remix 到你的工作区"
+      : "";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,6 +52,7 @@ export function AuthForm() {
 
   return (
     <div className="rounded-2xl border border-line bg-panel p-6 shadow-2xl shadow-black/40">
+      {hint && <p className="mb-4 rounded-lg bg-violet-500/10 px-3 py-2 text-xs leading-relaxed text-violet-200">{hint}</p>}
       <div className="mb-6 grid grid-cols-2 rounded-lg bg-panel-2 p-1 text-sm">
         {(["signin", "signup"] as const).map((m) => (
           <button
