@@ -28,7 +28,7 @@ import { extractHtml } from "@/lib/agents/extract";
 import { saveAppData } from "@/lib/runtime";
 import { streamGenerate } from "@/lib/sse";
 import { createClient } from "@/lib/supabase/client";
-import type { AgentRole, Message, Project } from "@/lib/types";
+import type { Message, Project } from "@/lib/types";
 import { saveVersion } from "@/lib/versions";
 
 export interface VersionMeta {
@@ -104,7 +104,7 @@ export function Editor({ userId, project: initialProject, initialMessages, initi
   const shownHtml = viewing?.html ?? html;
   const currentNumber = versions[0]?.number ?? null;
 
-  const updateLast = useCallback((agent: AgentRole, fn: (it: ChatItem) => ChatItem) => {
+  const updateLast = useCallback((agent: string, fn: (it: ChatItem) => ChatItem) => {
     setItems((list) => {
       const idx = list.findLastIndex((it) => it.role === agent && it.streaming);
       if (idx < 0) return list;
@@ -138,7 +138,7 @@ export function Editor({ userId, project: initialProject, initialMessages, initi
             flow = e.flow;
             break;
           case "agent_start":
-            setItems((l) => [...l, { id: nanoid(), role: e.agent, content: "", streaming: true, status: e.status }]);
+            setItems((l) => [...l, { id: nanoid(), role: e.agent, content: "", streaming: true, status: e.status, profile: e.profile }]);
             if (e.agent === "engineer") engineerText = "";
             break;
           case "status":

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { PromptBox } from "@/components/PromptBox";
 import { createClient } from "@/lib/supabase/server";
-import { AGENTS } from "@/lib/types";
+import { BUILTIN_PROFILES as AGENTS } from "@/lib/types";
 
 export default async function Home() {
   const supabase = await createClient();

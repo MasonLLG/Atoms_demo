@@ -2,8 +2,8 @@
 
 import { AlertTriangle, GitCommitHorizontal } from "lucide-react";
 import type { Design, Prd } from "@/lib/agents/schemas";
-import { AGENTS, type AgentRole, type MessageRole } from "@/lib/types";
-import { DesignCard, PrdCard } from "./cards";
+import { type AgentProfileView, type MessageRole, resolveProfile } from "@/lib/types";
+import { DesignCard, NotesCard, PrdCard } from "./cards";
 
 export interface ChatItem {
   id: string;
@@ -16,6 +16,8 @@ export interface ChatItem {
   status?: string;
   streamText?: string;
   error?: boolean;
+  /** 流式过程中由 agent_start 事件带来的智能体形象 */
+  profile?: AgentProfileView;
 }
 
 export function MessageBubble({ item, onOpenVersion }: { item: ChatItem; onOpenVersion?: (id: string) => void }) {
@@ -35,7 +37,7 @@ export function MessageBubble({ item, onOpenVersion }: { item: ChatItem; onOpenV
     );
   }
 
-  const agent = AGENTS[item.role as AgentRole];
+  const agent = resolveProfile(item.role, item.data, item.profile);
   const lines = item.streamText ? item.streamText.split("\n").length : 0;
   return (
     <div className="flex gap-2.5">
@@ -68,6 +70,7 @@ export function MessageBubble({ item, onOpenVersion }: { item: ChatItem; onOpenV
         )}
         {item.role === "pm" && isPrd(item.data) && <PrdCard prd={item.data} />}
         {item.role === "architect" && isDesign(item.data) && <DesignCard design={item.data} />}
+        {hasRecommendations(item.data) && <NotesCard title={`💡 ${agent.name} 的建议`} items={item.data.recommendations} />}
         {item.versionId && item.versionNumber && (
           <button
             onClick={() => onOpenVersion?.(item.versionId!)}
@@ -86,4 +89,7 @@ function isPrd(d: unknown): d is Prd {
 }
 function isDesign(d: unknown): d is Design {
   return !!d && typeof d === "object" && "components" in d && "style" in d;
+}
+function hasRecommendations(d: unknown): d is { recommendations: string[] } {
+  return !!d && typeof d === "object" && Array.isArray((d as { recommendations?: unknown }).recommendations);
 }

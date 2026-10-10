@@ -25,6 +25,12 @@ export async function mockJson(system: string, user: string): Promise<string> {
       dataModel: [{ entity: "Item", fields: ["id", "text", "done", "createdAt"] }],
     });
   }
+  if (system.includes("recommendations")) {
+    return JSON.stringify({
+      summary: "已从我的专业角度给出建议（离线演示模型）",
+      recommendations: ["按钮增加悬停与点击反馈", "空状态给出引导文案"],
+    });
+  }
   return JSON.stringify({
     style: { theme: "简洁浅色", primaryColor: "#6366f1", layout: "居中单栏卡片布局" },
     components: [

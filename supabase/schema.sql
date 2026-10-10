@@ -1,4 +1,5 @@
 -- Atoms Demo 数据库结构：在 Supabase 控制台 SQL Editor 中整段执行即可（可重复执行）
+-- 已经执行过旧版本的数据库，请按顺序执行 supabase/migrations/ 下的增量脚本
 
 create extension if not exists pgcrypto;
 
@@ -39,7 +40,8 @@ create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects (id) on delete cascade,
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  role text not null check (role in ('user', 'leader', 'pm', 'architect', 'engineer', 'system')),
+  -- user / system / 智能体 id（内置为 leader、pm、architect、engineer，也可以是自定义 id）
+  role text not null constraint messages_role_check check (role ~ '^[a-z][a-z0-9_-]{1,31}$'),
   content text not null default '',
   data jsonb,
   version_id uuid references public.versions (id) on delete set null,

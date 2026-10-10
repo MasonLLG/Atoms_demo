@@ -78,3 +78,16 @@ export function DesignCard({ design }: { design: Design }) {
     </Collapsible>
   );
 }
+
+/** 自定义智能体的建议清单 */
+export function NotesCard({ title, items }: { title: string; items: string[] }) {
+  return (
+    <Collapsible title={title}>
+      <ul className="list-disc space-y-0.5 pl-4">
+        {items.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </Collapsible>
+  );
+}
